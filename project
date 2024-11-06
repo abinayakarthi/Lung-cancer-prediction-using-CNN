@@ -1,0 +1,264 @@
+import os
+
+# List all files in the /kaggle/input directory
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
+
+zip_file = 'archive.zip'
+import zipfile
+import os
+
+# Define the path to the uploaded ZIP file
+zip_file = 'archive.zip'  # Update this with your actual path
+
+# Define the extraction path
+extract_to = '/kaggle/working/your_extracted_folder'  # Extracting to the working directory
+
+# Create the destination folder if it doesn't exist
+os.makedirs(extract_to, exist_ok=True)
+
+# Extract the ZIP file
+with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+    zip_ref.extractall(extract_to)
+
+# Change the current working directory to the extracted folder
+os.chdir(extract_to)
+
+# Verify the current working directory
+print("Current working directory:", os.getcwd())
+print("Contents:", os.listdir('.'))
+
+
+
+
+
+
+import numpy as np # linear algebra
+import pandas as pd
+import os
+from PIL import Image
+import IPython.display as display
+
+# Path to your extracted folder
+extracted_folder = '/kaggle/working/your_extracted_folder'
+
+# Loop through the extracted folder and find image files
+for dirname, _, filenames in os.walk(extracted_folder):
+    for filename in filenames:
+        file_path = os.path.join(dirname, filename)
+
+        # Print the file path (optional)
+        print(file_path)
+
+        # Check if the file is an image
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
+            # Open the image file
+            img = Image.open(file_path)
+
+            # Display the image in Jupyter Notebook
+            display.display(img)
+
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+def preprocessingImages1(path):
+    image_data = ImageDataGenerator(
+        zoom_range=0.2,
+        shear_range=0.2,
+        rescale=1/255,
+        horizontal_flip=True,
+        vertical_flip=True
+    )
+    image = image_data.flow_from_directory(
+        directory=path,
+        target_size=(224, 224),
+        batch_size=32,
+        class_mode='categorical'  # Use 'categorical' since you have 4 classes
+    )
+    return image
+
+# Ensure the path is correct
+path = "/kaggle/working/your_extracted_folder/Data/train"  # Adjust this if necessary
+train_data = preprocessingImages1(path)
+import os
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+def preprocessingImages2(path):
+    image_data = ImageDataGenerator(rescale=1/255)
+    image = image_data.flow_from_directory(
+        directory=path,
+        target_size=(224, 224),
+        batch_size=32,
+        class_mode='categorical'
+    )
+    return image
+
+# Adjust this path based on your findings in the Kaggle file browser
+parent_dir = "/kaggle/working/your_extracted_folder/Data/"  # Correct path to the Data directory
+
+# Check the contents of the Data folder
+print("Contents of the Data folder:", os.listdir(parent_dir))  # List contents of Data folder
+
+# Adjust paths based on the actual folder name and structure
+path_test = os.path.join(parent_dir, "test")  # Actual test path
+path_val = os.path.join(parent_dir, "valid")  # Actual validation path
+
+# Ensure the directories for test and validation data exist before processing
+if os.path.exists(path_test):
+    test_data = preprocessingImages2(path_test)
+else:
+    print("Test directory not found.")
+
+if os.path.exists(path_val):
+    val_data = preprocessingImages2(path_val)
+else:
+    print("Validation directory not found.")
+
+import os
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras import layers, models
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
+# Image Preprocessing
+def preprocess_images(path):
+    image_data = ImageDataGenerator(rescale=1/255)
+    data = image_data.flow_from_directory(
+        directory=path,
+        target_size=(224, 224),
+        batch_size=32,
+        class_mode='categorical'
+    )
+    return data
+
+# Paths to the datasets (adjust the paths based on your directory structure)
+train_dir = "/kaggle/working/your_extracted_folder/Data/train"
+val_dir = "/kaggle/working/your_extracted_folder/Data/valid"
+
+# Load and preprocess the data
+train_data = preprocess_images(train_dir)
+val_data = preprocess_images(val_dir)
+
+# CNN + Transformer hybrid model
+def build_cnn_transformer_model(input_shape, num_classes):
+    inputs = layers.Input(shape=input_shape)
+
+    # CNN Block
+    x = layers.Conv2D(32, (3, 3), activation='relu')(inputs)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+
+    x = layers.Conv2D(64, (3, 3), activation='relu')(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+
+    x = layers.Conv2D(128, (3, 3), activation='relu')(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+
+    # Flatten the CNN output
+    x = layers.Flatten()(x)
+
+    # Expand dimensions to fit transformer input
+    x = layers.Dense(128, activation='relu')(x)
+    x = layers.Reshape((1, 128))(x)
+
+    # Transformer block
+    transformer_block = layers.MultiHeadAttention(num_heads=4, key_dim=128)
+    attn_output = transformer_block(x, x)
+    x = layers.Add()([x, attn_output])
+    x = layers.LayerNormalization()(x)
+
+    # MLP Head
+    x = layers.GlobalAveragePooling1D()(x)
+    x = layers.Dense(64, activation='relu')(x)
+    x = layers.Dropout(0.3)(x)
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+
+    model = models.Model(inputs, outputs)
+    model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
+
+    return model
+
+# Model configuration
+input_shape = (224, 224, 3)  # Adjust this according to your dataset
+num_classes = 4  # Change based on your dataset
+model = build_cnn_transformer_model(input_shape, num_classes)
+
+# Callbacks for early stopping and model checkpoint
+callbacks = [
+    EarlyStopping(patience=5, restore_best_weights=True),
+    ModelCheckpoint("best_cnn_transformer_model.keras", save_best_only=True)  # Use `.keras` extension
+]
+# Train the model
+history = model.fit(
+    train_data,
+    steps_per_epoch=50,
+    epochs=100,
+    verbose=1,
+    callbacks=callbacks,
+    validation_data=val_data,
+    validation_steps=16
+)
+test_loss, test_accuracy = model.evaluate(test_data)
+print(f"Test Loss: {test_loss}, Test Accuracy: {test_accuracy}")
+import matplotlib.pyplot as plt
+
+plt.plot(history.history['accuracy'],color='red',label='train')
+plt.plot(history.history['val_accuracy'],color='blue',label='validation')
+plt.legend()
+plt.show()
+plt.plot(history.history['loss'],color='red',label='train')
+plt.plot(history.history['val_loss'],color='blue',label='validation')
+plt.legend()
+plt.show()
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from keras.preprocessing.image import img_to_array, load_img
+from keras.applications.mobilenet import preprocess_input
+from keras.models import load_model
+
+parent_test_dir = "/kaggle/input/your_extracted_folder/Data/test"
+
+# Check if the directory exists and list its contents
+try:
+    contents = os.listdir(parent_test_dir)
+    print("Contents of the adenocarcinoma test directory:", contents)
+except FileNotFoundError as e:
+    print(f"Error: {e}")
+
+# Use one of the files from the directory
+path = "/kaggle/working/your_extracted_folder/Data/test/squamous.cell.carcinoma/000117 (3).png"
+
+# Image preprocessing and prediction using hybrid CNN-Transformer model
+try:
+    img = load_img(path, target_size=(224, 224))
+    input_arr = img_to_array(img)
+    input_arr = preprocess_input(input_arr)
+
+    plt.imshow((input_arr + 1) / 2)
+    plt.axis('off')
+    plt.show()
+
+    input_arr = np.expand_dims(input_arr, axis=0)
+
+    # Load the CNN + Transformer model
+    model = load_model('best_cnn_transformer_model.keras')
+
+    # Predict the class of the image
+    if 'model' in locals():
+        predictions = model.predict(input_arr)
+        predicted_class_index = np.argmax(predictions[0])
+        predicted_class_probability = np.max(predictions[0])
+
+        print("Predicted class index:", predicted_class_index)
+        print("Predicted class probability:", predicted_class_probability)
+
+        class_names = ['adenocarcinoma', 'large.cell.carcinoma', 'normal', 'squamous.cell.carcinoma']
+        predicted_class_name = class_names[predicted_class_index]
+
+        print("Predicted class name:", predicted_class_name)
+    else:
+           print("Error: The model is not defined. Please define or load the model before making predictions.")
+except FileNotFoundError as e:
+    print(f"Error loading image: {e}")
+
